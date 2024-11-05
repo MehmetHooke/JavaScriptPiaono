@@ -13,12 +13,12 @@ import java.util.*;
 public class SoundAnalysisService {
 
     private static final Map<String, Double> noteFrequencies = new HashMap<>();
-    private static final double FREQUENCY_TOLERANCE = 2.0; // 1 Hz'lik tolerans
     private String lastDetectedNote = ""; // Son algılanan nota
 
-    // Müzikte beklenen minimum ve maksimum frekans değerleri
-    private static final double MIN_MUSIC_FREQUENCY = 65.41;  // Do2'nin frekansı
-    private static final double MAX_MUSIC_FREQUENCY = 4186.01; // Do8'in frekansı
+    private static final double MIN_MUSIC_FREQUENCY = 32.70;  // Do1
+    private static final double MAX_MUSIC_FREQUENCY = 4186.01; // Do8
+    private static final double MIN_AMPLITUDE_THRESHOLD = 0.02; // Gürültü seviyesi altındaki frekansları yok saymak için
+
 
 
 
@@ -129,30 +129,32 @@ public class SoundAnalysisService {
 
     public void analyzeAudio(String filePath) {
         try {
-            double defaultParam1 = 512;  // İşleme parametreleri
+            double defaultParam1 = 512;
             double defaultParam2 = 128;
 
             WaveformSimilarityBasedOverlapAdd wsola = new WaveformSimilarityBasedOverlapAdd(
                     WaveformSimilarityBasedOverlapAdd.Parameters.musicDefaults(defaultParam1, defaultParam2)
             );
 
-            // AudioDispatcher oluşturuluyor
-            AudioDispatcher dispatcher = AudioDispatcherFactory.fromPipe(filePath, 44100, 1024, 0);
+            AudioDispatcher dispatcher = AudioDispatcherFactory.fromPipe(filePath, 44100, 512, 256);
 
-            // PitchDetectionHandler tanımlanıyor
+            Map<Integer, String> noteMap = new HashMap<>(); // Zaman aralığı ve nota kaydı için
+
             PitchDetectionHandler pdh = (pitchDetectionResult, e) -> {
                 final float pitchInHz = pitchDetectionResult.getPitch();
 
-                // Frekansın belirli bir müzik aralığında olup olmadığını kontrol ediyoruz
                 if (pitchInHz >= MIN_MUSIC_FREQUENCY && pitchInHz <= MAX_MUSIC_FREQUENCY) {
-                    // Harmonik analiz ekleyerek notayı doğrulama
-                    if (isHarmonicMatch(pitchInHz)) {
-                        logNoteWithTime(pitchInHz, e.getTimeStamp());
+                    if (isHarmonicMatch(pitchInHz, calculateTolerance(pitchInHz))) {
+                        String currentNote = findClosestNoteWithTimeFilter(pitchInHz, e.getTimeStamp(), noteMap);
+                        if (!currentNote.isEmpty()) {
+                            System.out.println("Zaman: " + String.format("%.2f", e.getTimeStamp()) + " sn - Algılanan Pitch: " +
+                                    String.format("%.2f", pitchInHz) + " Hz - Nota: " + currentNote);
+                        }
                     }
                 }
             };
 
-            dispatcher.addAudioProcessor(new PitchProcessor(PitchEstimationAlgorithm.YIN, 44100, 1024, pdh));
+            dispatcher.addAudioProcessor(new PitchProcessor(PitchEstimationAlgorithm.YIN, 44100, 512, pdh));
             dispatcher.run();
 
         } catch (Exception e) {
@@ -160,14 +162,35 @@ public class SoundAnalysisService {
         }
     }
 
+    private String findClosestNoteWithTimeFilter(double frequency, double timeStamp, Map<Integer, String> noteMap) {
+        String closestNote = findClosestNote(frequency);
+
+        int timeKey = (int) (timeStamp * 2); // 0.5 saniyelik dilimlere yuvarla
+
+        if (closestNote.equals(lastDetectedNote) && noteMap.containsKey(timeKey)) {
+            return ""; // Aynı notayı aynı aralıkta tekrar yazdırma
+        }
+
+        lastDetectedNote = closestNote;
+        noteMap.put(timeKey, closestNote);
+
+        return closestNote;
+    }
+
+    // Çoğunluk oylama fonksiyonu
+    private String determineMostFrequentNoteInInterval(Map<String, Integer> noteCounts) {
+        return noteCounts.entrySet().stream()
+                .max(Comparator.comparingInt(Map.Entry::getValue))
+                .map(Map.Entry::getKey)
+                .orElse("");
+    }
+
     public void logNoteWithTime(double frequency, double timeStamp) {
         String currentNote = findClosestNote(frequency);
-
-        // Eğer notada belirgin bir değişiklik varsa veya ilk defa algılanıyorsa
         if (!currentNote.equals(lastDetectedNote)) {
             System.out.println("Zaman: " + String.format("%.2f", timeStamp) + " sn - Algılanan Pitch: " +
                     String.format("%.2f", frequency) + " Hz - Nota: " + currentNote);
-            lastDetectedNote = currentNote; // Son algılanan notayı güncelle
+            lastDetectedNote = currentNote;
         }
     }
 
@@ -177,42 +200,43 @@ public class SoundAnalysisService {
 
         for (Map.Entry<String, Double> entry : noteFrequencies.entrySet()) {
             double difference = Math.abs(entry.getValue() - frequency);
-
-            // Eğer frekans farkı toleransın altındaysa en yakın notayı seç
-            if (difference < smallestDifference && difference <= FREQUENCY_TOLERANCE) {
+            if (difference < smallestDifference && difference <= calculateTolerance(frequency)) {
                 smallestDifference = difference;
                 closestNote = entry.getKey();
             }
         }
-
         return closestNote;
     }
 
-    /**
-     * Harmonik uyumluluğu kontrol eden metod
-     */
-    private boolean isHarmonicMatch(double frequency) {
+    private boolean isHarmonicMatch(double frequency, double tolerance) {
         String closestNote = findClosestNote(frequency);
 
-        // Eğer bir nota bulunmadıysa veya geçerli bir nota değilse, harmonik kontrol yapılmaz
         if (closestNote.isEmpty()) {
             return false;
         }
 
         double baseFrequency = noteFrequencies.get(closestNote);
-
-        // İlk üç harmonik frekansını hesaplayıp tolerans sınırında kontrol et
         for (int i = 2; i <= 4; i++) {
             double harmonicFrequency = baseFrequency * i;
             double difference = Math.abs(harmonicFrequency - frequency * i);
-
-            // Harmoniklerin tolerans aralığında olup olmadığını kontrol et
-            if (difference > FREQUENCY_TOLERANCE) {
+            if (difference > tolerance) {
                 return false;
             }
         }
         return true;
     }
+
+    private double calculateTolerance(double frequency) {
+        if (frequency < 250) {
+            return 1.0;
+        } else if (frequency < 500) {
+            return 2.0;
+        } else {
+            return 3.0;
+        }
+    }
+
+
 
 
 
