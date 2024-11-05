@@ -1,0 +1,37 @@
+plugins {
+    id 'java'
+}
+
+group = 'org.example'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+
+// https://mvnrepository.com/artifact/be.tarsos.dsp/core
+// https://mvnrepository.com/artifact/be.tarsos.dsp/jvm
+   // implementation ('be.tarsos.dsp:jvm:2.5')
+
+   // implementation 'com.github.dragoon000320:tarsosdsp:1.0'
+
+    // https://mvnrepository.com/artifact/com.github.axet/TarsosDSP
+    implementation 'com.github.axet:TarsosDSP:2.4-1'
+
+
+    // https://mvnrepository.com/artifact/be.tarsos.dsp/jvm
+   // implementation files('/libs/tarsosDSP-2.5.jar')
+
+    // https://mvnrepository.com/artifact/com.google.code.gson/gson
+    // https://mvnrepository.com/artifact/com.google.code.gson/gson
+    implementation 'com.google.code.gson:gson:2.8.9'
+
+    //implementation 'be.tarsos.dsp:jvm:2.5'
+
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
