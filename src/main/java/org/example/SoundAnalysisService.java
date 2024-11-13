@@ -16,8 +16,8 @@ public class SoundAnalysisService {
     private String lastDetectedNote = ""; // Son algılanan nota
 
     private static final double MIN_MUSIC_FREQUENCY = 32.70;  // Do1
-    private static final double MAX_MUSIC_FREQUENCY = 4186.01; // Do8
-    private static final double MIN_AMPLITUDE_THRESHOLD = 0.02; // Gürültü seviyesi altındaki frekansları yok saymak için
+    private static final double MAX_MUSIC_FREQUENCY = 3951.07; // Si7
+    private static final double MIN_AMPLITUDE_THRESHOLD = 0.1; // Gürültü seviyesi altındaki frekansları yok saymak için
 
 
 
@@ -136,7 +136,7 @@ public class SoundAnalysisService {
                     WaveformSimilarityBasedOverlapAdd.Parameters.musicDefaults(defaultParam1, defaultParam2)
             );
 
-            AudioDispatcher dispatcher = AudioDispatcherFactory.fromPipe(filePath, 44100, 512, 256);
+            AudioDispatcher dispatcher = AudioDispatcherFactory.fromPipe(filePath, 44100, 1024, 256);
 
             Map<Integer, String> noteMap = new HashMap<>(); // Zaman aralığı ve nota kaydı için
 
@@ -147,7 +147,7 @@ public class SoundAnalysisService {
                     if (isHarmonicMatch(pitchInHz, calculateTolerance(pitchInHz))) {
                         String currentNote = findClosestNoteWithTimeFilter(pitchInHz, e.getTimeStamp(), noteMap);
                         if (!currentNote.isEmpty()) {
-                            System.out.println("Zaman: " + String.format("%.2f", e.getTimeStamp()) + " sn - Algılanan Pitch: " +
+                            System.out.println("Zaman: " + String.format("%.2f", e.getTimeStamp()) + " sn - Alginana nota : " +
                                     String.format("%.2f", pitchInHz) + " Hz - Nota: " + currentNote);
                         }
                     }
@@ -177,7 +177,7 @@ public class SoundAnalysisService {
         return closestNote;
     }
 
-    // Çoğunluk oylama fonksiyonu
+    // Çoğunluk oylama fonksiyonu -- Kullanıma kapalı
     private String determineMostFrequentNoteInInterval(Map<String, Integer> noteCounts) {
         return noteCounts.entrySet().stream()
                 .max(Comparator.comparingInt(Map.Entry::getValue))
@@ -185,6 +185,8 @@ public class SoundAnalysisService {
                 .orElse("");
     }
 
+
+    // Kullanılmıyor
     public void logNoteWithTime(double frequency, double timeStamp) {
         String currentNote = findClosestNote(frequency);
         if (!currentNote.equals(lastDetectedNote)) {
@@ -193,7 +195,7 @@ public class SoundAnalysisService {
             lastDetectedNote = currentNote;
         }
     }
-
+    // Açıklama satırı eklenecek
     public String findClosestNote(double frequency) {
         String closestNote = "";
         double smallestDifference = Double.MAX_VALUE;
@@ -242,7 +244,8 @@ public class SoundAnalysisService {
 
     public static void main(String[] args) {
         SoundAnalysisService service = new SoundAnalysisService();
-        service.analyzeAudio("C:/Users\\hoke6\\OneDrive\\Masaüstü\\doremi1.wav"); // Dosya yolunu güncelleyin
+        service.analyzeAudio("C:/Users\\hoke6\\OneDrive\\Masaüstü\\doremi1.wav");
+        //service.analyzeAudio("C:/Users\\hoke6\\OneDrive\\Masaüstü\\cav_bella.wav");// Dosya yolunu girin
     }
 }
 
